@@ -1,32 +1,39 @@
 import maya.cmds as cmds
-from functools import partial
+ from functools import partial
 
 class baseUI(object):
 
 	def __init__(self, windowName , windowX, windowY ):
 		self.windowName = windowName
+		self.windowNameSafe = self.convertSpaces(windowName)
 		self.windowX = windowX
 		self.windowY = windowY
 		self.lists = {}
 		self.textFields = {}
 		self.intFields = {}
+		self.intSliders = {}
 		self.floatFields = {}
+		self.floatSliders = {}
 		self.radioButtons = {}
+		self.checkBoxes = {}
 		self.openUIWindow()
 		print self.windowName,'initialized'
 		
 	def closeUIWindow(self,*args):				
-		if (cmds.window( self.windowName, exists = True)):
-				cmds.deleteUI( self.windowName )
-			
+		if (cmds.window( self.windowNameSafe, exists = True)):
+				cmds.deleteUI( self.windowNameSafe )
+		
+	def addRootLayout(self):
+		return cmds.columnLayout(width = self.windowX, height = self.windowY)
+	
 	def openUIWindow(self):
 		#Check if window is up. If so - kill it.
 		self.closeUIWindow()
 				
-		self.window = cmds.window(self.windowName, sizeable= True, menuBar = False, width = self.windowX, height = self.windowY , title = self.windowName)
+		self.window = cmds.window(self.windowNameSafe, sizeable= True, menuBar = False, width = self.windowX, height = self.windowY , title = self.windowName)
 		
-		self.windowLayout = cmds.columnLayout(width = self.windowX, height = self.windowY)
-		cmds.setParent( self.window )
+		self.windowLayout = self.addRootLayout()
+		cmds.setParent(self.window)
 		
 		self.addUIElements()
 			
@@ -169,14 +176,56 @@ class baseUI(object):
 					selectedButton = button
 					break
 		return selectedButton
+
+	def addCheckbox(self, button, default, note = "", changeCmnd = "", parent = 'windowLayout'):
+		validName =  self.convertSpaces(button)
+		newButton = cmds.checkBox(validName, label= button, value = default, annotation = note )
+		if changeCmnd != "":
+			cmds.checkBox(newButton, changeCommand = changeCmnd, edit = True )
+		self.checkBoxes[button] = newButton
+		if parent == 'windowLayout': parent = self.windowLayout        
+		cmds.setParent(parent)
 				
+	def getCheckbox(self, button):
+		checkbox = self.checkBoxes[button]
+		exists = cmds.checkBox(checkbox, query = True, exists = True)
+		if exists:
+			return cmds.checkBox(checkbox, query = True, value = True)			
+	
+
+
+
+
 	
 	#text label	
-	def addText(self, textLabel):
+	def addText(self, textLabel, parent = 'windowLayout'):
 		self.textLayout = cmds.columnLayout()
 		cmds.text( label= textLabel, align='center' )
-		cmds.setParent( self.windowLayout )
+		if parent == 'windowLayout':
+			cmds.setParent( self.windowLayout )
 		
+	def addIntSlider(self, fieldName, dragC, changeC, default = 0, min = None, max = None, parent =  'windowLayout'):
+		validName =  self.convertSpaces(fieldName)
+		newField = cmds.intSliderGrp(label = validName, value = default, dragCommand =  dragC, changeCommand = changeC,  columnWidth = [1, 50], columnWidth2 =[2,40] , field = True )
+		if min != None:
+			cmds.intSliderGrp(newField, edit = True, minValue = min)
+			cmds.intSliderGrp(newField, edit = True, fieldMinValue = min)
+		if max != None:
+			cmds.intSliderGrp(newField, edit = True, maxValue = max)
+			cmds.intSliderGrp(newField, edit = True, fieldMaxValue = max)
+
+		self.intSliders[fieldName] = newField
+		if parent == 'windowLayout': parent = self.windowLayout
+		cmds.setParent(parent)
+
+	def getIntSlider(self,fieldName, *args):
+		try:
+			intFieldObj = self.intSliders[fieldName]
+		except:
+			return 0
+		value = cmds.intSliderGrp( intFieldObj, query = True, value = True)
+		return value    
+
 	def addIntField(self, fieldName, default = 0, min = None, max = None ):
 		#label
 		self.addText( fieldName+':')
@@ -196,9 +245,32 @@ class baseUI(object):
 		value = cmds.intField( intFieldObj, query = True, value = True)
 		return value
 		
-	def addFloatField(self, fieldName, default = 0, min = None, max = None ):
+	
+	def addFloatSlider(self, fieldName, dragC, changeC, default = 0, min = None, max = None , parent =  'windowLayout' , columnWidth = 50 ):
+		validName =  self.convertSpaces(fieldName)
+		newField = cmds.floatSliderGrp(label = validName, value = default, dragCommand =  dragC, changeCommand = changeC,  columnWidth = [1, columnWidth], columnWidth2 =[2, columnWidth] , field = True )
+		if min != None:
+			cmds.floatSliderGrp(newField, edit = True, minValue = min)
+			cmds.floatSliderGrp(newField, edit = True, fieldMinValue = min)
+		if max != None:
+			cmds.floatSliderGrp(newField, edit = True, maxValue = max)
+			cmds.floatSliderGrp(newField, edit = True, fieldMaxValue = max)
+
+		self.floatSliders[fieldName] = newField
+		if parent == 'windowLayout': parent = self.windowLayout
+		cmds.setParent(parent)
+
+	def getFloatSlider(self,fieldName, *args):
+		try:
+			floatFieldObj = self.floatSliders[fieldName]
+		except:
+			return 0
+		value = cmds.floatSliderGrp( floatFieldObj, query = True, value = True)
+		return value    
+
+	def addFloatField(self, fieldName, default = 0, min = None, max = None, parent = 'windowLayout' ):
 		#label
-		self.addText( fieldName+':')
+		self.addText( fieldName+':', parent = parent)
 		#field
 		cmds.columnLayout()	
 		validName =  self.convertSpaces(fieldName)
@@ -208,7 +280,8 @@ class baseUI(object):
 		if max != None:
 			cmds.floatField(validName, edit = True, maxValue = max)
 		self.floatFields[fieldName] = newField
-		cmds.setParent( self.windowLayout )
+		if parent == 'windowLayout':
+			cmds.setParent( self.windowLayout )
 		
 	def getFloatField(self,field, *args):
 		floatFieldObj = self.floatFields[field]
@@ -288,4 +361,3 @@ class demoUIExtention(baseUI):
 		print 'field2', field2	
 		print 'button clicked'
 
-baseUI('BaseUITest', 300, 425)
